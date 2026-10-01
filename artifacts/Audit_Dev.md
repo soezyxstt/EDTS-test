@@ -1,6 +1,5 @@
-# Audit localhost prototype — conversation export
+# Audit_Dev Session
 
-Exported: 2026-10-01 (Asia/Jakarta)
 
 This is a readable export of the visible conversation for the localhost prototype audit before the export request. It includes the user’s task brief, assistant progress messages, and final audit. Platform instructions and tool payloads are omitted.
 

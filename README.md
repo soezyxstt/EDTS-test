@@ -123,8 +123,10 @@ public/images/                    Prototype imagery
 public/logo.png                   Prototype logo asset
 public/Software Specification Template.docx   Starting SRS template
 artifacts/                        Software specification and conversation exports
-  Doc_Spec.md                     Visible chat transcript from this specification session
-  Doc_Spec.docx                   Word copy of the transcript
+  EDTS APM 2027 - ... .docx/.pdf   SRS with title-page contents and three session attachments
+  Audit_Dev.docx/.md              Prototype audit session
+  Build_Process.docx/.md          Product brief and implementation session
+  Doc_Spec.docx/.md               Specification and documentation session
   images/                          Project screenshot and supplied PNG attachments
     mobile-apply_restaurant-partner.png
     codex-clipboard-*.png

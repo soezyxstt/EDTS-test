@@ -1,10 +1,8 @@
-# EDTS APM 2027 Conversation Transcript
+# Doc_Spec Session
 
-Exported: 2026-10-01, 15:57 WIB
 
 Scope: The opening request and 4 earlier thread turns before the export request. Visible user and assistant messages are included. Tool activity is omitted.
 
-## Turn 1 | 2026-09-30, 16:43 WIB
 
 ### User
 
@@ -19,7 +17,6 @@ make the copy straight forward, no em dashes, if you think a description is just
 
 ---
 
-## Turn 2 | 2026-09-30, 16:43 WIB
 
 ### Assistant
 
@@ -31,7 +28,6 @@ The revised PDF now keeps the screening note intact across the page break. I’v
 
 ---
 
-## Turn 3 | 2026-10-01, 14:21 WIB
 
 ### Assistant
 
@@ -50,7 +46,6 @@ The six-page PDF was visually checked. It was rendered from the saved DOCX conte
 
 ---
 
-## Turn 4 | 2026-10-01, 14:23 WIB
 
 ### User
 
@@ -76,7 +71,6 @@ I checked the indexed paths and ran `git diff --check`; both passed. I did not r
 
 ---
 
-## Turn 5 | 2026-10-01, 14:36 WIB
 
 ### User
 
