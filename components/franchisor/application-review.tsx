@@ -17,6 +17,8 @@ import { ProposalEditor } from "./proposal-editor";
 import { DemoFileLink } from "@/components/demo-file-link";
 import { CommunicationPanel } from "@/components/communication-panel";
 import { googleMapsUrl } from "@/lib/location";
+import { readDemoFile } from "@/lib/demo-files";
+import type { ReviewBrief } from "@/app/api/application-review/route";
 
 function groupFields(fields: ProgramField[]) {
   const groups = new Map<string, ProgramField[]>();
@@ -33,6 +35,8 @@ export function ApplicationReview({ applicationId }: { applicationId: string }) 
   const [revisionFieldIds, setRevisionFieldIds] = useState<string[]>([]);
   const [programFields, setProgramFields] = useState<ProgramField[]>([]);
   const [notice, setNotice] = useState("");
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisNotice, setAnalysisNotice] = useState("");
   const application = applications.find((item) => item.id === applicationId);
   const answerGroups = groupFields(programFields.filter((field) => field.type !== "file"
     && Boolean(application?.answers[field.id]?.trim())));
@@ -43,6 +47,50 @@ export function ApplicationReview({ applicationId }: { applicationId: string }) 
     window.addEventListener("franchise-prototype:update", refresh);
     return () => window.removeEventListener("franchise-prototype:update", refresh);
   }, [application?.programId]);
+
+  async function analyzeAgain() {
+    if (!application || isAnalyzing || application.answers.aiConsent !== "true" || !application.screening || application.screening.outcome === "reject") return;
+    setIsAnalyzing(true);
+    setAnalysisNotice("Gemini sedang menganalisis jawaban dan dokumen…");
+    try {
+      const documentFieldIds = (["businessProfile", "financialSummary"] as const)
+        .filter((fieldId) => application.documents.some((document) => document.fieldId === fieldId));
+      const form = new FormData();
+      form.set("payload", JSON.stringify({
+        programName: application.programName,
+        fields: programFields.filter((field) => field.type !== "file"),
+        answers: application.answers,
+        screening: application.screening,
+        documentFieldIds,
+        aiConsent: true,
+      }));
+      for (const fieldId of documentFieldIds) {
+        const file = await readDemoFile(application.id, fieldId);
+        if (file && file.size <= 5 * 1024 * 1024 && /\.(pdf|jpe?g|png)$/i.test(file.name)) form.set(fieldId, file.blob, file.name);
+      }
+      const response = await fetch("/api/application-review", { method: "POST", body: form });
+      if (!response.ok) throw new Error("Analisis belum tersedia. Coba lagi.");
+      const result = await response.json() as ReviewBrief;
+      if (typeof result.summary !== "string" || typeof result.score !== "number" || !Array.isArray(result.strengths) || !Array.isArray(result.concerns)
+        || !Array.isArray(result.questions) || !Array.isArray(result.documentFindings) || !["gemini", "rules"].includes(result.source)) throw new Error("Respons analisis tidak valid.");
+      if (result.source !== "gemini") {
+        setAnalysisNotice(result.reviewNote || "Gemini belum tersedia. Coba lagi nanti.");
+        return;
+      }
+      updateDemoApplication(application.id, {
+        summary: result.summary, strengths: result.strengths,
+        concerns: [...new Set([...application.screening.reasons, ...result.concerns])],
+        score: result.score, followUpQuestions: result.questions, reviewSource: result.source,
+        reviewNote: result.reviewNote, locationAssessment: result.locationAssessment,
+        documentFindings: result.documentFindings, documentNote: result.documentNote,
+      });
+      setAnalysisNotice("Analisis Gemini diperbarui.");
+    } catch (error) {
+      setAnalysisNotice(error instanceof Error ? error.message : "Analisis gagal. Coba lagi.");
+    } finally {
+      setIsAnalyzing(false);
+    }
+  }
 
   function changeStage(stage: string) {
     if (!application) return;
@@ -107,6 +155,12 @@ export function ApplicationReview({ applicationId }: { applicationId: string }) 
               <p className={styles.summaryText}>{application.summary}</p>
               {application.reviewSource ? <p className={styles.sectionIntro}>{application.reviewSource === "pending" ? "Gemini sedang menyiapkan ringkasan…" : application.reviewSource === "gemini" ? "Ringkasan dan rekomendasi awal oleh Gemini." : "Ringkasan dari pemeriksaan aturan."}</p> : null}
               {application.reviewNote ? <p className={styles.sectionIntro}>{application.reviewNote}</p> : null}
+              {application.answers.aiConsent === "true" && application.screening && application.screening.outcome !== "reject" ? (
+                <Button className="mt-4" variant="outline" type="button" disabled={isAnalyzing || !programFields.length} onClick={() => void analyzeAgain()}>
+                  {isAnalyzing ? "Menganalisis…" : "Analisis ulang dengan Gemini"}
+                </Button>
+              ) : null}
+              {analysisNotice ? <p className={styles.sectionIntro} role="status" aria-live="polite">{analysisNotice}</p> : null}
               {application.followUpQuestions?.length ? (
                 <div className={styles.formStack} style={{ marginTop: 18 }}>
                   <strong className={styles.fieldLabel}>Pertanyaan tindak lanjut</strong>

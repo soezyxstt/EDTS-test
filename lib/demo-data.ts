@@ -338,7 +338,15 @@ function writeStored<T>(key: string, value: T) {
 function migratePrograms(previous: FranchiseProgram[], preserveRemovedFields = false): FranchiseProgram[] {
   return previous.map((program) => {
     const defaults = DEMO_PROGRAMS.find((item) => item.id === program.id);
-    if (!defaults || (preserveRemovedFields && (program.fieldSchemaVersion ?? 0) >= 4)) return program;
+    if (!defaults) return program;
+    if (preserveRemovedFields && (program.fieldSchemaVersion ?? 0) >= 4) {
+      return {
+        ...program,
+        fields: program.fields.map((field) => field.id === "businessProfile" && field.label === "Profil bisnis atau CV"
+          ? { ...field, label: "Profil bisnis" }
+          : field),
+      };
+    }
     const previousFields = new Map(program.fields.map((field) => [field.id, field]));
     const defaultFieldIds = new Set(defaults.fields.map((field) => field.id));
     const previousRules = new Map(program.screeningRules.map((rule) => [rule.id, rule]));

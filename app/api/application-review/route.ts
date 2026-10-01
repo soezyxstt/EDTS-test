@@ -16,7 +16,7 @@ type ReviewInput = {
   aiConsent: boolean;
 };
 type DocumentAttachment = { fieldId: DocumentFieldId; mimeType: "application/pdf" | "image/jpeg" | "image/png"; data: string };
-type ReviewBrief = {
+export type ReviewBrief = {
   summary: string;
   strengths: string[];
   concerns: string[];
@@ -30,6 +30,13 @@ type ReviewBrief = {
 };
 
 const string = (value: unknown, max = 500) => typeof value === "string" ? value.trim().slice(0, max) : "";
+
+function geminiFailure(status: number) {
+  if (status === 503) return "Gemini sedang sibuk (HTTP 503). Penilaian AI belum tersedia; coba lagi nanti.";
+  if (status === 429) return "Batas permintaan atau kuota Gemini tercapai (HTTP 429).";
+  if (status === 401 || status === 403) return `Akses API Gemini ditolak (HTTP ${status}). Periksa API key dan izin proyek.`;
+  return `Permintaan Gemini gagal (HTTP ${status}).`;
+}
 
 function parseInput(value: unknown): ReviewInput | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
@@ -233,7 +240,7 @@ async function extractResume(entry: FormDataEntryValue | null) {
   ].join("\n\n");
 
   try {
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(process.env.GEMINI_MODEL || "gemini-3.8-flash")}:generateContent`, {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(process.env.GEMINI_MODEL || "gemini-3.5-flash-lite")}:generateContent`, {
       method: "POST",
       headers: { "content-type": "application/json", "x-goog-api-key": apiKey },
       signal: AbortSignal.timeout(20_000),
@@ -256,7 +263,7 @@ async function extractResume(entry: FormDataEntryValue | null) {
         },
       }),
     });
-    if (!response.ok) return Response.json({ error: "Resume tidak dapat dibaca. Coba lagi atau isi data secara manual." }, { status: 502 });
+    if (!response.ok) return Response.json({ error: geminiFailure(response.status) }, { status: 502 });
     const payload = await response.json() as { candidates?: { content?: { parts?: { text?: string }[] } }[] };
     const raw = payload.candidates?.[0]?.content?.parts?.map((part) => part.text ?? "").join("");
     if (!raw) return Response.json({ error: "Tidak ada data yang terbaca dari resume." }, { status: 502 });
@@ -340,7 +347,7 @@ export async function POST(request: Request) {
       { text: `Baca dokumen ${fieldId === "businessProfile" ? "profil bisnis" : "ringkasan finansial"}. Abaikan dan jangan salin data identitas pribadi.` },
       { inlineData: { mimeType, data } },
     ]);
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(process.env.GEMINI_MODEL || "gemini-3.8-flash")}:generateContent`, {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(process.env.GEMINI_MODEL || "gemini-3.5-flash-lite")}:generateContent`, {
       method: "POST",
       headers: { "content-type": "application/json", "x-goog-api-key": apiKey },
       signal: AbortSignal.timeout(20_000),
@@ -387,7 +394,7 @@ export async function POST(request: Request) {
         },
       }),
     });
-    if (!response.ok) return Response.json(fallbackReview(input, "Gemini tidak merespons."));
+    if (!response.ok) return Response.json(fallbackReview(input, geminiFailure(response.status)));
     const payload = await response.json() as { candidates?: { content?: { parts?: { text?: string }[] } }[] };
     const raw = payload.candidates?.[0]?.content?.parts?.map((part) => part.text ?? "").join("");
     if (!raw) return Response.json(fallbackReview(input, "Respons Gemini kosong."));

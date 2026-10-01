@@ -129,8 +129,12 @@ export function ProposalEditor({ application }: { application: FranchiseApplicat
         ) : null}
         {proposal && !needsFranchisorApproval && !mutuallyApproved ? (
           <p className={styles.notice} role="status">
-            {proposal.response === "rejected" ? "Proposal ditolak pemohon." : proposal.response === "changes-requested" ? "Pemohon meminta perubahan." : proposal.franchisorResponse ? "Menunggu respons pemohon." : "Proposal belum dikirim."}
+            {proposal.response === "rejected" ? "Proposal ditolak pemohon." : proposal.response === "changes-requested" ? "Pemohon meminta perubahan." : proposal.sentAt ? "Menunggu respons pemohon." : "Proposal belum dikirim."}
           </p>
+        ) : null}
+
+        {proposal?.response === "changes-requested" && application.answers.proposalChangeRequest ? (
+          <p className={styles.notice}>Catatan pemohon: {application.answers.proposalChangeRequest}</p>
         ) : null}
 
         {!terminal && !needsFranchisorApproval && application.stage !== "approved" ? (

@@ -119,6 +119,8 @@ export default function ApplicationForm({
   const [stepIndex, setStepIndex] = useState(0);
   const [notice, setNotice] = useState("");
   const [ready, setReady] = useState(false);
+  const [draftIdentityId, setDraftIdentityId] = useState("");
+  const submittedRef = useRef(false);
   const [isApplicant, setIsApplicant] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isExtractingResume, setIsExtractingResume] = useState(false);
@@ -134,6 +136,7 @@ export default function ApplicationForm({
     const initialize = () => {
       const identity = readWorkspaceIdentity();
       activeIdentityId = identity.id;
+      setDraftIdentityId(identity.id);
       const savedProfile = profileAnswers(identity);
       setIsApplicant(identity.role === "applicant");
       const storedProgram = (process.env.NODE_ENV === "development" || hasRemoteWorkspace())
@@ -168,6 +171,7 @@ export default function ApplicationForm({
       setIsApplicant(identity.role === "applicant");
       if (identity.id !== activeIdentityId) {
         activeIdentityId = identity.id;
+        setDraftIdentityId(identity.id);
         const savedProfile = profileAnswers(identity);
         setSelectedFiles({});
         setAnswers(withoutFileAnswers(savedProfile, currentProgram));
@@ -196,6 +200,17 @@ export default function ApplicationForm({
       window.removeEventListener("storage", refreshProgram);
     };
   }, [fallbackProgram, initialProgram, programId]);
+
+  useEffect(() => {
+    if (!ready || !isApplicant || !programExists || submittedRef.current) return;
+    if (readWorkspaceIdentity().id !== draftIdentityId) return;
+    try {
+      window.localStorage.setItem(draftKey(draftIdentityId, programId), JSON.stringify({ answers: withoutFileAnswers(answers, program), stepIndex }));
+    } catch {
+      const timer = window.setTimeout(() => setNotice("Draf tidak dapat disimpan di perangkat ini."), 0);
+      return () => window.clearTimeout(timer);
+    }
+  }, [answers, draftIdentityId, isApplicant, program, programExists, programId, ready, stepIndex]);
 
   function setAnswer(fieldId: string, value: string) {
     setAnswers((current) => ({ ...current, [fieldId]: value }));
@@ -274,7 +289,7 @@ export default function ApplicationForm({
 
   function saveDraft() {
     try {
-    const identity = readWorkspaceIdentity();
+      const identity = readWorkspaceIdentity();
       window.localStorage.setItem(draftKey(identity.id, programId), JSON.stringify({ answers: withoutFileAnswers(answers, program), stepIndex }));
       setNotice("Draf tersimpan di perangkat ini. Anda dapat kembali melanjutkan nanti.");
     } catch {
@@ -420,6 +435,7 @@ export default function ApplicationForm({
           documentNote: documentFieldIds.length ? "OCR belum berjalan; periksa dokumen secara manual." : undefined,
         }));
     }
+    submittedRef.current = true;
     window.localStorage.removeItem(draftKey(identity.id, programId));
     if (identity.id === "nadia") window.localStorage.removeItem(`${DRAFT_PREFIX}${programId}`);
     router.push(`/applications/${application.id}`);
@@ -580,6 +596,7 @@ export default function ApplicationForm({
                 </div>
 
                 <div className="mt-8 border-t border-border pt-5">
+                  <p className="mb-4 text-xs text-muted-foreground">Isian dan langkah tersimpan otomatis di perangkat ini. Setelah memuat ulang halaman, pilih kembali berkas.</p>
                   {notice ? <p className="mb-4 text-sm font-semibold" role="status" aria-live="polite">{notice}</p> : null}
                   <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex flex-wrap gap-3">

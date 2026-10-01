@@ -10,7 +10,11 @@ export function useDemoApplications() {
     const sync = () => setApplications(readDemoApplications());
     sync();
     window.addEventListener("franchise-prototype:update", sync);
-    return () => window.removeEventListener("franchise-prototype:update", sync);
+    window.addEventListener("storage", sync);
+    return () => {
+      window.removeEventListener("franchise-prototype:update", sync);
+      window.removeEventListener("storage", sync);
+    };
   }, []);
 
   return applications;
