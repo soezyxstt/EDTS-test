@@ -10,7 +10,7 @@ import {
   type FranchiseApplication,
   type FranchiseProgram,
 } from "@/lib/demo-data";
-import { writeAuthenticatedIdentity } from "@/lib/demo-session";
+import { clearDemoIdentity, writeAuthenticatedIdentity } from "@/lib/demo-session";
 
 export function WorkspaceSync() {
   const { data: session, isPending } = authClient.useSession();
@@ -26,6 +26,7 @@ export function WorkspaceSync() {
 
   useEffect(() => {
     if (isPending) return;
+    clearDemoIdentity();
 
     let cancelled = false;
     ready.current = false;

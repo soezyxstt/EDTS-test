@@ -1,9 +1,10 @@
 import { SignOutButton } from "@/components/auth/sign-out-button";
 import { redirect } from "next/navigation";
-import { getSession } from "@/lib/auth-server";
+import { getDemoSession, getSession } from "@/lib/auth-server";
 
 export default async function ProfilePage() {
-  const session = await getSession();
+  const demo = await getDemoSession();
+  const session = demo ? { user: demo } : await getSession();
   if (!session) redirect("/sign-in");
 
   return (

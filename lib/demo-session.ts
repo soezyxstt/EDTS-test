@@ -25,7 +25,15 @@ export const DEMO_SESSION_COOKIE = "franchise-prototype-demo-session-v1";
 
 const IDENTITY_KEY = "franchise-prototype:identity:v1";
 const AUTH_IDENTITY_KEY = "franchise-prototype:auth-identity:v1";
+const DEMO_MODE_KEY = "franchise-prototype:demo-mode:v1";
 const PROFILE_PREFIX = "franchise-prototype:profile:v1:";
+
+export function isDemoWorkspace() {
+  if (process.env.NODE_ENV === "development") return true;
+  if (typeof window === "undefined") return false;
+  try { return window.localStorage.getItem(DEMO_MODE_KEY) === "true"; }
+  catch { return false; }
+}
 
 export function readDemoIdentity(): DemoIdentity {
   if (typeof window === "undefined") return DEMO_IDENTITIES[0];
@@ -39,7 +47,7 @@ export function readDemoIdentity(): DemoIdentity {
 }
 
 export function readWorkspaceIdentity(): WorkspaceIdentity {
-  if (typeof window !== "undefined" && process.env.NODE_ENV !== "development") {
+  if (typeof window !== "undefined" && !isDemoWorkspace()) {
     try {
       const saved = JSON.parse(window.localStorage.getItem(AUTH_IDENTITY_KEY) ?? "null") as Partial<WorkspaceIdentity> | null;
       if (saved && typeof saved.id === "string" && typeof saved.name === "string" && typeof saved.email === "string" &&
@@ -69,6 +77,8 @@ export function writeDemoIdentity(id: DemoIdentityId): DemoIdentity {
   if (typeof window !== "undefined") {
     try {
       window.localStorage.setItem(IDENTITY_KEY, identity.id);
+      window.localStorage.setItem(DEMO_MODE_KEY, "true");
+      window.localStorage.removeItem(AUTH_IDENTITY_KEY);
     } catch {
       // The prototype still works for this page when browser storage is unavailable.
     }
@@ -82,6 +92,7 @@ export function clearDemoIdentity() {
   if (typeof window === "undefined") return;
   try {
     window.localStorage.removeItem(IDENTITY_KEY);
+    window.localStorage.removeItem(DEMO_MODE_KEY);
   } catch {
     // A later page load still starts without a demo session.
   }

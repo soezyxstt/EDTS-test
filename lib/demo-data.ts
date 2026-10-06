@@ -1,3 +1,7 @@
+import { isDemoWorkspace } from "@/lib/demo-session";
+import type { ReviewAction } from "./ai-actions";
+import { evaluateScreening, scoreScreening } from "./screening";
+
 export type ProgramFieldType = "text" | "email" | "tel" | "number" | "date" | "textarea" | "select" | "file" | "checkbox" | "location";
 
 export type ProgramField = {
@@ -94,6 +98,8 @@ export type FranchiseApplication = {
   documentFindings?: DocumentFinding[];
   documentNote?: string;
   followUpQuestions?: string[];
+  reviewActions?: ReviewAction[];
+  reviewRevision?: number;
   strengths: string[];
   concerns: string[];
   documents: DemoDocument[];
@@ -314,9 +320,10 @@ export const DEMO_APPLICATIONS: FranchiseApplication[] = [
   },
 ];
 
-const PROGRAMS_KEY = "franchise-prototype:programs:v2";
-const PREVIOUS_PROGRAMS_KEY = "franchise-prototype:programs:v1";
-const APPLICATIONS_KEY = "franchise-prototype:applications:v1";
+const workspaceKey = (key: string) => `${isDemoWorkspace() ? "franchise-prototype" : "franchise-workspace"}:${key}`;
+const programsKey = () => workspaceKey("programs:v2");
+const previousProgramsKey = () => workspaceKey("programs:v1");
+const applicationsKey = () => workspaceKey("applications:v1");
 let remoteWorkspaceLoaded = false;
 
 function readStored<T>(key: string, fallback: T): T {
@@ -412,37 +419,37 @@ function migratePrograms(previous: FranchiseProgram[], preserveRemovedFields = f
 }
 
 export function readDemoPrograms() {
-  if (process.env.NODE_ENV !== "development" && !remoteWorkspaceLoaded) return structuredClone(DEMO_PROGRAMS);
+  if (!isDemoWorkspace() && !remoteWorkspaceLoaded) return structuredClone(DEMO_PROGRAMS);
   if (typeof window === "undefined") return structuredClone(DEMO_PROGRAMS);
   try {
-    const current = window.localStorage.getItem(PROGRAMS_KEY);
+    const current = window.localStorage.getItem(programsKey());
     if (current) {
       const migrated = migratePrograms(JSON.parse(current) as FranchiseProgram[], true);
-      if (JSON.stringify(migrated) !== current) window.localStorage.setItem(PROGRAMS_KEY, JSON.stringify(migrated));
+      if (JSON.stringify(migrated) !== current) window.localStorage.setItem(programsKey(), JSON.stringify(migrated));
       return migrated;
     }
-    const previous = window.localStorage.getItem(PREVIOUS_PROGRAMS_KEY);
+    const previous = window.localStorage.getItem(previousProgramsKey());
     if (!previous) return structuredClone(DEMO_PROGRAMS);
     const migrated = migratePrograms(JSON.parse(previous) as FranchiseProgram[]);
-    window.localStorage.setItem(PROGRAMS_KEY, JSON.stringify(migrated));
+    window.localStorage.setItem(programsKey(), JSON.stringify(migrated));
     return migrated;
   } catch {
     return structuredClone(DEMO_PROGRAMS);
   }
 }
-export const writeDemoPrograms = (programs: FranchiseProgram[]) => writeStored(PROGRAMS_KEY, programs);
-export const readDemoApplications = () => process.env.NODE_ENV !== "development" && !remoteWorkspaceLoaded
+export const writeDemoPrograms = (programs: FranchiseProgram[]) => writeStored(programsKey(), programs);
+export const readDemoApplications = () => !isDemoWorkspace() && !remoteWorkspaceLoaded
   ? []
-  : readStored(APPLICATIONS_KEY, process.env.NODE_ENV === "development" ? DEMO_APPLICATIONS : []);
-export const writeDemoApplications = (applications: FranchiseApplication[]) => writeStored(APPLICATIONS_KEY, applications);
+  : readStored(applicationsKey(), isDemoWorkspace() ? DEMO_APPLICATIONS : []);
+export const writeDemoApplications = (applications: FranchiseApplication[]) => writeStored(applicationsKey(), applications);
 export const hasRemoteWorkspace = () => remoteWorkspaceLoaded;
 
 export function clearDemoWorkspace() {
   if (typeof window === "undefined") return;
   remoteWorkspaceLoaded = false;
-  window.localStorage.removeItem(PROGRAMS_KEY);
-  window.localStorage.removeItem(PREVIOUS_PROGRAMS_KEY);
-  window.localStorage.removeItem(APPLICATIONS_KEY);
+  window.localStorage.removeItem(programsKey());
+  window.localStorage.removeItem(previousProgramsKey());
+  window.localStorage.removeItem(applicationsKey());
   window.dispatchEvent(new Event("franchise-prototype:update"));
 }
 
@@ -450,8 +457,8 @@ export function hydrateDemoWorkspace(programs: FranchiseProgram[], applications:
   if (typeof window === "undefined") return false;
   const migrated = migratePrograms(programs, true);
   const changed = JSON.stringify(migrated) !== JSON.stringify(programs);
-  window.localStorage.setItem(PROGRAMS_KEY, JSON.stringify(migrated));
-  window.localStorage.setItem(APPLICATIONS_KEY, JSON.stringify(applications));
+  window.localStorage.setItem(programsKey(), JSON.stringify(migrated));
+  window.localStorage.setItem(applicationsKey(), JSON.stringify(applications));
   remoteWorkspaceLoaded = true;
   window.dispatchEvent(new Event("franchise-prototype:update"));
   return changed;
@@ -467,11 +474,30 @@ export function saveDemoApplication(application: FranchiseApplication) {
   return next;
 }
 
-export function updateDemoApplication(id: string, changes: Partial<FranchiseApplication>) {
+export function updateDemoApplication(id: string, changes: Partial<FranchiseApplication>, expectedInput?: Pick<FranchiseApplication, "answers" | "reviewRevision">) {
   const applications = readDemoApplications();
   const current = applications.find((item) => item.id === id);
   if (!current) return undefined;
+  if (expectedInput && (JSON.stringify(current.answers) !== JSON.stringify(expectedInput.answers) || current.reviewRevision !== expectedInput.reviewRevision)) return undefined;
   const updated = { ...current, ...changes, ...(changes.stage && changes.stage !== "rejected" ? { withdrawnAt: undefined } : {}) };
+  if (changes.documents || (changes.answers && JSON.stringify(changes.answers) !== JSON.stringify(current.answers))) {
+    updated.reviewRevision = (current.reviewRevision ?? 0) + 1;
+    const program = readDemoPrograms().find((item) => item.id === current.programId);
+    if (program) {
+      updated.screening = evaluateScreening(program.screeningRules, program.fields, updated.answers);
+      updated.score = scoreScreening(updated.screening);
+    }
+    updated.reviewSource = "rules";
+    updated.reviewNote = "Jawaban diperbarui. Jalankan analisis ulang untuk mendapatkan saran AI terbaru.";
+    updated.summary = "Pengajuan diperbarui dan menunggu peninjauan kembali.";
+    updated.strengths = [];
+    updated.concerns = updated.screening?.reasons ?? [];
+    updated.reviewActions = [];
+    updated.followUpQuestions = [];
+    updated.locationAssessment = undefined;
+    updated.documentFindings = [];
+    updated.documentNote = "Dokumen perlu ditinjau kembali setelah revisi.";
+  }
   writeDemoApplications(applications.map((item) => item.id === id ? updated : item));
   return updated;
 }

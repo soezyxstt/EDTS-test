@@ -2,7 +2,7 @@ import { cookies } from "next/headers";
 import { DEMO_IDENTITIES, DEMO_SESSION_COOKIE } from "@/lib/demo-session";
 
 export async function POST(request: Request) {
-  if (process.env.NODE_ENV !== "development") return Response.json({ error: "Demo access is local only." }, { status: 404 });
+  if (request.headers.get("origin") !== new URL(request.url).origin) return Response.json({ error: "Invalid origin." }, { status: 403 });
 
   let body: unknown;
   try {
@@ -18,7 +18,7 @@ export async function POST(request: Request) {
   const identity = DEMO_IDENTITIES.find((item) => item.id === identityId);
   if (!identity) return Response.json({ error: "Unknown demo identity." }, { status: 400 });
 
-  // ponytail: the unsigned demo cookie is accepted only in local development; shared demo access needs real auth.
+  // Demo cookies only unlock browser-local sample data, never authenticated database APIs.
   (await cookies()).set(DEMO_SESSION_COOKIE, identity.id, {
     httpOnly: true,
     sameSite: "lax",
@@ -29,8 +29,8 @@ export async function POST(request: Request) {
   return Response.json({ ok: true });
 }
 
-export async function DELETE() {
-  if (process.env.NODE_ENV !== "development") return Response.json({ error: "Demo access is local only." }, { status: 404 });
+export async function DELETE(request: Request) {
+  if (request.headers.get("origin") !== new URL(request.url).origin) return Response.json({ error: "Invalid origin." }, { status: 403 });
   (await cookies()).delete(DEMO_SESSION_COOKIE);
   return Response.json({ ok: true });
 }

@@ -1,4 +1,5 @@
 // Node 24+: node scripts/check-review-errors.cjs (no network requests).
+/* eslint-disable @typescript-eslint/no-require-imports -- Standalone CommonJS check. */
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
@@ -11,7 +12,7 @@ let calls = 0;
 const routeExports = {};
 vm.runInNewContext(source, { exports: routeExports, Request, Response, File, AbortSignal, TextDecoder, Uint8Array, Buffer,
   process: { env: { GEMINI_API_KEY: 'synthetic-test-key' } },
-  require: (name) => name === '@/lib/screening' ? require('../lib/screening.ts') : require(name),
+  require: (name) => name.startsWith('@/lib/') ? require(`../lib/${name.slice(6)}.ts`) : require(name),
   fetch: async () => { calls++; return new Response('{}', { status }); },
 });
 const input = { programName: 'Test', fields: [{ id: 'experience', label: 'Pengalaman', type: 'text', required: true }],

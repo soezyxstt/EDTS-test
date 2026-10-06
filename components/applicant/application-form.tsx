@@ -10,9 +10,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { LocationPicker } from "@/components/applicant/location-picker";
 import { hasRemoteWorkspace, readDemoPrograms, saveDemoApplication, updateDemoApplication, type DocumentFinding, type FranchiseProgram, type LocationAssessment, type ProgramField } from "@/lib/demo-data";
 import { parseMapPoint } from "@/lib/location";
-import { readWorkspaceIdentity, readDemoProfile, writeDemoProfile, type WorkspaceIdentity } from "@/lib/demo-session";
+import { isDemoWorkspace, readWorkspaceIdentity, readDemoProfile, writeDemoProfile, type WorkspaceIdentity } from "@/lib/demo-session";
 import { evaluateScreening, scoreScreening } from "@/lib/screening";
 import { saveDemoFiles, type PendingDemoFile } from "@/lib/demo-files";
+import { normalizeActions } from "@/lib/ai-actions";
+import type { ReviewBrief } from "@/app/api/application-review/route";
 
 type Answers = Record<string, string>;
 type Step = { title: string; fields: ProgramField[] };
@@ -112,7 +114,7 @@ export default function ApplicationForm({
     screeningRules: [],
   }, [initialProgram, programId]);
   const [program, setProgram] = useState(fallbackProgram);
-  const [programExists, setProgramExists] = useState(() => process.env.NODE_ENV === "development" && Boolean(initialProgram));
+  const [programExists, setProgramExists] = useState(() => isDemoWorkspace() && Boolean(initialProgram));
   const [answers, setAnswers] = useState<Answers>({});
   const [selectedFiles, setSelectedFiles] = useState<Record<string, File>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -125,11 +127,46 @@ export default function ApplicationForm({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isExtractingResume, setIsExtractingResume] = useState(false);
   const [resumeNotice, setResumeNotice] = useState("");
+  const [isCheckingDraft, setIsCheckingDraft] = useState(false);
+  const [draftCheck, setDraftCheck] = useState<{ snapshot: string; result?: ReviewBrief; error?: string }>();
   const resumeInputRef = useRef<HTMLInputElement>(null);
+  const stepHeadingRef = useRef<HTMLHeadingElement>(null);
   const steps = useMemo(() => getSteps(program), [program]);
   const visible = (field: ProgramField) => !field.condition || Boolean(answers[field.condition]?.trim());
   const currentFields = (steps[stepIndex]?.fields ?? []).filter(visible);
   const currentGroups = groupFields(currentFields);
+
+  useEffect(() => { stepHeadingRef.current?.focus(); }, [stepIndex]);
+  const draftSnapshot = JSON.stringify({ answers, program, identity: draftIdentityId });
+  const currentCheck = draftCheck?.snapshot === draftSnapshot ? draftCheck : undefined;
+
+  async function checkDraft() {
+    if (isCheckingDraft || answers.aiConsent !== "true") return;
+    const snapshot = draftSnapshot;
+    setIsCheckingDraft(true);
+    setDraftCheck(undefined);
+    try {
+      const response = await fetch("/api/application-review", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          programName: program.name,
+          fields: program.fields.filter(visible).map(({ id, label, type, required }) => ({ id, label, type, required })),
+          answers: withoutFileAnswers(answers, program),
+          screening: evaluateScreening(program.screeningRules, program.fields, answers),
+          documentFieldIds: [],
+          aiConsent: true,
+        }),
+      });
+      const result = await response.json() as ReviewBrief;
+      if (!response.ok || typeof result.summary !== "string" || !["rules", "gemini"].includes(result.source)) throw new Error("Pemeriksaan belum tersedia. Coba lagi.");
+      setDraftCheck({ snapshot, result: { ...result, actions: normalizeActions(result.actions, program.fields, answers) } });
+    } catch {
+      setDraftCheck({ snapshot, error: "Pemeriksaan belum tersedia. Anda tetap dapat melanjutkan pengajuan." });
+    } finally {
+      setIsCheckingDraft(false);
+    }
+  }
 
   useEffect(() => {
     let activeIdentityId = readWorkspaceIdentity().id;
@@ -139,13 +176,13 @@ export default function ApplicationForm({
       setDraftIdentityId(identity.id);
       const savedProfile = profileAnswers(identity);
       setIsApplicant(identity.role === "applicant");
-      const storedProgram = (process.env.NODE_ENV === "development" || hasRemoteWorkspace())
+      const storedProgram = (isDemoWorkspace() || hasRemoteWorkspace())
         ? readDemoPrograms().find((item) => item.id === programId)
         : undefined;
       if (storedProgram) {
         setProgram(storedProgram);
         setProgramExists(true);
-      } else setProgramExists(process.env.NODE_ENV === "development" && Boolean(initialProgram));
+      } else setProgramExists(isDemoWorkspace() && Boolean(initialProgram));
       try {
         const legacyKey = identity.id === "nadia" ? `${DRAFT_PREFIX}${programId}` : null;
         const draft = window.localStorage.getItem(draftKey(identity.id, programId))
@@ -164,7 +201,7 @@ export default function ApplicationForm({
     const timer = window.setTimeout(initialize, 0);
     const refreshProgram = () => {
       const identity = readWorkspaceIdentity();
-      const updated = (process.env.NODE_ENV === "development" || hasRemoteWorkspace())
+      const updated = (isDemoWorkspace() || hasRemoteWorkspace())
         ? readDemoPrograms().find((item) => item.id === programId)
         : undefined;
       const currentProgram = updated ?? fallbackProgram;
@@ -190,7 +227,7 @@ export default function ApplicationForm({
       if (updated) {
         setProgram(updated);
         setProgramExists(true);
-      } else setProgramExists(process.env.NODE_ENV === "development" && Boolean(initialProgram));
+      } else setProgramExists(isDemoWorkspace() && Boolean(initialProgram));
     };
     window.addEventListener("franchise-prototype:update", refreshProgram);
     window.addEventListener("storage", refreshProgram);
@@ -419,12 +456,13 @@ export default function ApplicationForm({
           concerns: [...new Set([...screening.reasons, ...result.concerns.filter((item): item is string => typeof item === "string")])],
           score: result.score,
           followUpQuestions: result.questions.filter((item): item is string => typeof item === "string"),
+          reviewActions: normalizeActions(result.actions, program.fields, answers),
           reviewSource: result.source === "gemini" ? "gemini" : "rules",
           reviewNote: typeof result.reviewNote === "string" ? result.reviewNote : undefined,
           locationAssessment,
           documentFindings,
           documentNote: typeof result.documentNote === "string" ? result.documentNote : undefined,
-        });
+        }, application);
         })
         .catch(() => updateDemoApplication(application.id, {
           summary: "Pemeriksaan otomatis tidak tersedia. Pengajuan menunggu tinjauan manual.",
@@ -433,7 +471,7 @@ export default function ApplicationForm({
           score: scoreScreening(screening),
           concerns: screening.reasons,
           documentNote: documentFieldIds.length ? "OCR belum berjalan; periksa dokumen secara manual." : undefined,
-        }));
+        }, application));
     }
     submittedRef.current = true;
     window.localStorage.removeItem(draftKey(identity.id, programId));
@@ -531,7 +569,7 @@ export default function ApplicationForm({
   }
 
   return (
-    <div className="container-wide py-8 sm:py-12">
+    <div className="application-page container-wide py-8 sm:py-12">
       <Link className="text-link" href="/">Kembali ke program</Link>
       <div className="mt-6 grid gap-8 lg:grid-cols-[minmax(0,1fr)_300px] lg:items-start">
         <section>
@@ -542,8 +580,8 @@ export default function ApplicationForm({
               <h2 className="text-xl font-bold">Pengajuan belum dibuka</h2>
             </div>
           ) : (
-            <div className="surface-card mt-8 p-5 sm:p-8">
-              <div className="grid grid-cols-2 gap-x-3 gap-y-4 border-b border-border pb-6 sm:grid-cols-3 sm:gap-4 xl:grid-cols-7">
+            <div className="application-card surface-card mt-8 p-5 sm:p-8">
+              <div className="form-progress grid grid-cols-2 gap-x-3 gap-y-4 border-b border-border pb-6 sm:grid-cols-3 sm:gap-4 xl:grid-cols-7">
                 {steps.map((step, index) => (
                   <div key={step.title} className="min-w-0">
                     <div className={`flex h-8 w-8 items-center justify-center border text-xs font-bold ${index === stepIndex ? "border-secondary bg-secondary text-foreground" : index < stepIndex ? "border-foreground bg-foreground text-white" : "border-border bg-white text-muted-foreground"}`} aria-current={index === stepIndex ? "step" : undefined}>
@@ -554,10 +592,10 @@ export default function ApplicationForm({
                 ))}
               </div>
 
-              <form className="pt-6" onSubmit={(event) => void onContinue(event, window.performance.timeOrigin + event.timeStamp)} noValidate>
+              <form key={stepIndex} className="form-step pt-6" onSubmit={(event) => void onContinue(event, window.performance.timeOrigin + event.timeStamp)} noValidate>
                 <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-end">
                   <div>
-                    <h2 className="text-xl font-bold">{steps[stepIndex]?.title}</h2>
+                    <h2 ref={stepHeadingRef} tabIndex={-1} className="text-xl font-bold">{steps[stepIndex]?.title}</h2>
                   </div>
                   <p className="text-xs text-muted-foreground">Langkah {stepIndex + 1} dari {steps.length}</p>
                 </div>
@@ -594,6 +632,38 @@ export default function ApplicationForm({
                   ))}
                   {!currentFields.length ? <p className="sm:col-span-2 text-sm text-muted-foreground">Tidak ada informasi tambahan pada langkah ini.</p> : null}
                 </div>
+
+                {stepIndex === steps.length - 1 ? (
+                  <section className="mt-8 border-t border-border pt-5" aria-labelledby="draft-check-heading">
+                    <h3 id="draft-check-heading" className="text-lg font-bold">Periksa kesiapan pengajuan</h3>
+                    <p className="mt-2 text-sm text-muted-foreground">Dapatkan saran untuk memperjelas jawaban bisnis sebelum dikirim. Pemeriksaan draf ini hanya membaca isian, belum membaca berkas.</p>
+                    {answers.aiConsent !== "true" ? <p className="mt-2 text-sm">Aktifkan persetujuan analisis AI untuk menggunakan pemeriksaan ini.</p> : null}
+                    <Button className="mt-4" type="button" variant="outline" disabled={isCheckingDraft || answers.aiConsent !== "true"} onClick={() => void checkDraft()}>
+                      {isCheckingDraft ? "Memeriksa draf…" : "Periksa draf dengan AI"}
+                    </Button>
+                    <div role="status" aria-live="polite" className="mt-3 text-sm">
+                      {currentCheck?.error}
+                      {currentCheck?.result ? <>
+                        <p>{currentCheck.result.source === "gemini" ? "Saran AI berdasarkan jawaban Anda." : currentCheck.result.reviewNote}</p>
+                        <p className="mt-2">{currentCheck.result.summary}</p>
+                        {currentCheck.result.actions.length ? <ul className="mt-4 space-y-4">
+                          {currentCheck.result.actions.map((action) => <li key={action.fieldId}>
+                            <strong>{program.fields.find((field) => field.id === action.fieldId)?.label}</strong>
+                            <p className="mt-1 text-muted-foreground">{action.evidence ? `Dasar: “${action.evidence}”` : "Belum diisi."}</p>
+                            <p className="mt-1">{action.suggestion}</p>
+                            <Button className="mt-2" variant="link" type="button" onClick={() => {
+                              const index = steps.findIndex((step) => step.fields.some((field) => field.id === action.fieldId));
+                              if (index >= 0) {
+                                setStepIndex(index);
+                                window.setTimeout(() => document.getElementById(action.fieldId)?.focus(), 0);
+                              }
+                            }}>Perbaiki jawaban</Button>
+                          </li>)}
+                        </ul> : <p className="mt-2">Tidak ada saran per kolom. Tetap periksa kelengkapan dan kebenaran data.</p>}
+                      </> : null}
+                    </div>
+                  </section>
+                ) : null}
 
                 <div className="mt-8 border-t border-border pt-5">
                   <p className="mb-4 text-xs text-muted-foreground">Isian dan langkah tersimpan otomatis di perangkat ini. Setelah memuat ulang halaman, pilih kembali berkas.</p>

@@ -1,7 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { application, program } from "@/lib/db-schema";
-import { getSession } from "@/lib/auth-server";
+import { getDemoSession, getSession } from "@/lib/auth-server";
 
 const MAX_BYTES = 1_048_576;
 const MAX_ROWS = 500;
@@ -52,6 +52,7 @@ async function readBody(request: Request) {
 }
 
 async function authorizedSession() {
+  if (await getDemoSession()) throw new RequestError(401, "Demo data stays in this browser.");
   const session = await getSession();
   if (!session) throw new RequestError(401, "Sign in required.");
   const role = session.user.role;

@@ -26,7 +26,7 @@ export default function ProgramDirectory() {
     <>
       <section className="landing-hero border-b border-border">
         <div className="container-wide grid gap-8 py-8 sm:py-12 lg:grid-cols-[1fr_1fr] lg:items-center lg:gap-12 lg:py-14">
-          <div>
+          <div className="hero-copy">
             <h1 className="max-w-2xl text-4xl font-bold leading-[1.08] tracking-tight text-foreground sm:text-5xl lg:text-[3.5rem]">
               Temukan peluang untuk tumbuh bersama.
             </h1>
@@ -35,7 +35,7 @@ export default function ProgramDirectory() {
               <Button variant="outline" nativeButton={false} render={<Link href="/applications" />}>Lihat aplikasi saya</Button>
             </div>
           </div>
-          <div className="relative aspect-[16/10] min-h-64 overflow-hidden rounded-md border border-border bg-white shadow-sm">
+          <div className="hero-image relative aspect-[16/10] min-h-64 overflow-hidden rounded-md bg-white">
             <Image
               src="/images/mcd-foods-2.avif"
               alt="Pilihan menu McDonald's"
@@ -56,7 +56,7 @@ export default function ProgramDirectory() {
         {openPrograms.length ? (
           <div className="mt-7 grid gap-5 lg:grid-cols-2">
             {openPrograms.map((program) => (
-              <article key={program.id} className="surface-card flex flex-col border-t-4 border-t-secondary p-6 sm:p-8">
+              <article key={program.id} className="program-card surface-card flex flex-col p-6 sm:p-8">
                 <h3 className="text-2xl font-bold leading-tight">{program.name}</h3>
                 <p className="mt-2 text-sm leading-6 text-muted-foreground">{program.summary}</p>
                 <dl className="mt-6 grid gap-4 border-y border-border py-5 sm:grid-cols-2">
@@ -76,7 +76,7 @@ export default function ProgramDirectory() {
                 <div className="mt-6">
                   <Button
                     nativeButton={false}
-                    render={<Link href={{ pathname: "/sign-in", query: { callbackURL: `/apply/${program.id}` } }} />}
+                    render={<Link href={`/apply/${program.id}`} />}
                   >
                     Mulai pengajuan
                   </Button>

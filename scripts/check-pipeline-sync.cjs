@@ -1,5 +1,9 @@
 // Node 24+, Playwright via NODE_PATH; requires localhost:3000.
 const assert = require('node:assert/strict');
+require('node:module').registerHooks({ resolve(specifier, context, next) {
+  if (context.parentURL?.endsWith(".ts") && specifier.startsWith("./") && !require("node:path").extname(specifier)) specifier += ".ts";
+  return next(specifier === '@/lib/demo-session' ? new URL('../lib/demo-session.ts', require('node:url').pathToFileURL(__filename)).href : specifier, context);
+} });
 const { chromium } = require('playwright');
 const { DEMO_APPLICATIONS } = require('../lib/demo-data.ts');
 (async () => {

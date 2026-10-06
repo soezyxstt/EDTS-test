@@ -1,12 +1,10 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { authClient } from "@/lib/auth-client";
 import { clearDemoIdentity, writeAuthenticatedIdentity } from "@/lib/demo-session";
 
 export function SignOutButton() {
-  const router = useRouter();
   return (
     <Button
       variant="outline"
@@ -15,9 +13,8 @@ export function SignOutButton() {
         await authClient.signOut();
         clearDemoIdentity();
         writeAuthenticatedIdentity(null);
-        if (process.env.NODE_ENV === "development") await fetch("/api/demo-session", { method: "DELETE" });
-        router.replace("/");
-        router.refresh();
+        const response = await fetch("/api/demo-session", { method: "DELETE" });
+        if (response.ok) window.location.assign(new URL("/", window.location.origin).href);
       }}
     >
       Keluar

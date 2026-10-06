@@ -20,10 +20,16 @@ const path = require('node:path');
   });
   const result = await response.json();
   console.log(JSON.stringify({ httpStatus: response.status, elapsedMs: Date.now() - started, source: result.source,
-    reviewNote: result.reviewNote, locationRating: result.locationAssessment?.rating, documentFindings: result.documentFindings?.length }));
+    reviewNote: result.reviewNote, locationRating: result.locationAssessment?.rating, documentFindings: result.documentFindings?.length, actions: result.actions?.length }));
   assert.ok(response.ok);
   assert.equal(result.source, 'gemini', 'Expected live Gemini review');
   assert.ok(result.locationAssessment?.summary);
   assert.equal(result.documentFindings.length, 2);
+  assert.ok(Array.isArray(result.actions));
+  for (const action of result.actions) {
+    assert.ok(Object.hasOwn(answers, action.fieldId));
+    assert.ok(action.evidence && answers[action.fieldId].includes(action.evidence), 'AI evidence must match the answer');
+    assert.ok(action.suggestion);
+  }
   console.log('PASS: live Gemini review, location assessment, both synthetic PDFs');
 })().catch((error) => { console.error(error.message); process.exitCode = 1; });

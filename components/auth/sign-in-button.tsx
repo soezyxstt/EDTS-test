@@ -23,6 +23,8 @@ export function SignInButton({ callbackURL }: { callbackURL: string }) {
     setPending(true);
     setError("");
     try {
+      const cleared = await fetch("/api/demo-session", { method: "DELETE" });
+      if (!cleared.ok) throw new Error("Could not end demo session.");
       const result = await authClient.signIn.social({ provider: "google", callbackURL });
       if (result.error) throw new Error("Sign-in failed.");
     } catch {

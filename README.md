@@ -27,11 +27,12 @@ The example programs, questions, investment ranges, and rules are prototype cont
 ## Data, integrations, and limits
 
 - **Authentication:** Better Auth with Google OAuth. New accounts are applicants by default. Set `FRANCHISOR_EMAIL` to assign the matching email the franchisor role.
-- **Development demo:** The sign-in page offers applicant and franchisor demo access only when `NODE_ENV` is `development`.
+- **Demo:** The sign-in page offers applicant and franchisor demo access in development and production. Sample data stays in this browser, separately from account workspace data. Demo cookies never authorize database workspace APIs.
 - **Workspace records:** Outside development, authenticated programs and applications load and save through `/api/workspace` to the configured Turso/libSQL database. In development, sample records and workspace edits use browser storage.
 - **Drafts and files:** In-progress form drafts use `localStorage`. Uploaded files are stored in the browser's IndexedDB, so they are not shared across devices or stored with the database workspace.
 - **Messages and reminders:** These use browser `localStorage`. The reminder control records a reminder locally; it does not send email.
 - **Gemini:** `/api/application-review` supports resume extraction and optional application review. Resume extraction sends the selected resume to Gemini when configured. Optional review can send applicant answers and selected business or financial documents after the applicant grants AI review permission. The resume extraction flow has no separate consent step in the current code.
+- **Practical AI assistance:** applicants can check business answers on the final form step before submitting, with consent and without sending files. Suggestions link to the relevant form step. Reviewers can add a suggestion to an editable revision draft; sending remains a separate human action. Each suggestion references an existing business field and a verbatim answer excerpt, or an actually empty answer. Changed answers invalidate earlier reviews, and late analysis responses cannot overwrite a revised application. Rules fallback is explicitly labeled. Location analysis and OCR remain preliminary, not verified market research or financial due diligence.
 - **Location review:** A map point and AI location summary are not verified market research. Confirm site suitability independently.
 - **Deployment:** Production hosting, OAuth configuration, database access, and Gemini credentials depend on the deployment environment and have not been verified by this repository documentation.
 
@@ -44,7 +45,7 @@ npm ci
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). For Google sign-in or database-backed workspaces, configure the environment variables below in a local environment file. Local demo access is available in development.
+Open [http://localhost:3000](http://localhost:3000). For Google sign-in or database-backed workspaces, configure the environment variables below in a local environment file. Demo access also works with `npm run build` and `npm run start`.
 
 ### Environment variables
 
@@ -61,6 +62,10 @@ Open [http://localhost:3000](http://localhost:3000). For Google sign-in or datab
 | `GEMINI_MODEL` | Optional Gemini model override. The code defaults to `gemini-3.8-flash`. |
 
 Keep real credentials in an ignored local environment file. Do not commit credentials.
+
+For the hosted test, set `BETTER_AUTH_URL=https://edts-apm.adihnursyam.com` and register `https://edts-apm.adihnursyam.com/api/auth/callback/google` in Google OAuth. Production builds fall back to this canonical URL if the configured URL is localhost; the exact production origin is trusted without disabling CSRF checks.
+
+After the configured franchisor has signed in, run `node scripts/seed-programs.cjs` (Node 24+) to add the two starter programs to the database. Existing program records are preserved. The applicant form requires an applicant session; franchisor accounts use the management portal.
 
 ### Database
 

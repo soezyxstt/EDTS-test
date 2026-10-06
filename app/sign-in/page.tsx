@@ -1,6 +1,8 @@
 import Image from "next/image";
 import { SignInButton } from "@/components/auth/sign-in-button";
 import { DemoAccess } from "@/components/demo-access";
+import { redirect } from "next/navigation";
+import { getDemoSession, getSession } from "@/lib/auth-server";
 
 function safeCallbackURL(value?: string) {
   return value?.startsWith("/") && !value.startsWith("//") && !value.startsWith("/\\") ? value : "/";
@@ -12,6 +14,13 @@ export default async function SignInPage({
   searchParams: Promise<{ callbackURL?: string }>;
 }) {
   const { callbackURL } = await searchParams;
+  const destination = safeCallbackURL(callbackURL);
+  const demo = await getDemoSession();
+  const session = demo ? null : await getSession();
+  if (session) redirect(destination.startsWith("/sign-in") ? "/profile" : destination);
+  if (demo && (destination === "/" || destination === "/profile"
+    || (demo.role === "applicant" && (destination.startsWith("/apply/") || destination.startsWith("/applications")))
+    || (demo.role === "franchisor" && destination.startsWith("/manage")))) redirect(destination);
   return (
     <section className="container-wide flex flex-1 items-center py-8 sm:py-12">
       <div className="surface-card mx-auto grid w-full max-w-5xl overflow-hidden md:grid-cols-2">
@@ -36,8 +45,8 @@ export default async function SignInPage({
               Kelola pengajuan sebagai pemohon atau tinjau aplikasi sebagai franchisor.
             </p>
           </div>
-          <SignInButton callbackURL={safeCallbackURL(callbackURL)} />
-          <DemoAccess callbackURL={safeCallbackURL(callbackURL)} />
+          <SignInButton callbackURL={destination} />
+          <DemoAccess callbackURL={destination} />
         </div>
       </div>
     </section>

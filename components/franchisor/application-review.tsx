@@ -19,6 +19,7 @@ import { CommunicationPanel } from "@/components/communication-panel";
 import { googleMapsUrl } from "@/lib/location";
 import { readDemoFile } from "@/lib/demo-files";
 import type { ReviewBrief } from "@/app/api/application-review/route";
+import { normalizeActions } from "@/lib/ai-actions";
 
 function groupFields(fields: ProgramField[]) {
   const groups = new Map<string, ProgramField[]>();
@@ -77,14 +78,15 @@ export function ApplicationReview({ applicationId }: { applicationId: string }) 
         setAnalysisNotice(result.reviewNote || "Gemini belum tersedia. Coba lagi nanti.");
         return;
       }
-      updateDemoApplication(application.id, {
+      const updated = updateDemoApplication(application.id, {
         summary: result.summary, strengths: result.strengths,
         concerns: [...new Set([...application.screening.reasons, ...result.concerns])],
         score: result.score, followUpQuestions: result.questions, reviewSource: result.source,
         reviewNote: result.reviewNote, locationAssessment: result.locationAssessment,
         documentFindings: result.documentFindings, documentNote: result.documentNote,
-      });
-      setAnalysisNotice("Analisis Gemini diperbarui.");
+        reviewActions: normalizeActions(result.actions, programFields, application.answers),
+      }, application);
+      setAnalysisNotice(updated ? "Analisis Gemini diperbarui." : "Jawaban berubah selama analisis. Jalankan analisis ulang.");
     } catch (error) {
       setAnalysisNotice(error instanceof Error ? error.message : "Analisis gagal. Coba lagi.");
     } finally {
@@ -161,6 +163,25 @@ export function ApplicationReview({ applicationId }: { applicationId: string }) 
                 </Button>
               ) : null}
               {analysisNotice ? <p className={styles.sectionIntro} role="status" aria-live="polite">{analysisNotice}</p> : null}
+              {application.reviewActions?.length ? (
+                <div className="mt-5 space-y-4">
+                  <h3 className={styles.fieldLabel}>Klarifikasi yang disarankan AI</h3>
+                  <p className={styles.sectionIntro}>Kutipan berasal dari jawaban pemohon. Tinjau saran sebelum meminta revisi.</p>
+                  {application.reviewActions.map((action) => (
+                    <div key={action.fieldId}>
+                      <strong className={styles.fieldLabel}>{programFields.find((field) => field.id === action.fieldId)?.label ?? action.fieldId}</strong>
+                      <p className={styles.sectionIntro}>{action.evidence ? `Dasar: “${action.evidence}”` : "Belum diisi."}</p>
+                      <p className="mt-1 text-sm">{action.suggestion}</p>
+                      <Button className="mt-2" type="button" variant="outline" disabled={revisionFieldIds.includes(action.fieldId)} onClick={() => {
+                        setRevisionFieldIds((current) => [...new Set([...current, action.fieldId])]);
+                        setRevisionText((current) => [current, action.suggestion].filter(Boolean).join("\n"));
+                        setNotice("Saran ditambahkan ke draf revisi. Periksa sebelum mengirim.");
+                        document.getElementById("revision-heading")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                      }}>{revisionFieldIds.includes(action.fieldId) ? "Ditambahkan ke draf revisi" : "Gunakan untuk draf revisi"}</Button>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
               {application.followUpQuestions?.length ? (
                 <div className={styles.formStack} style={{ marginTop: 18 }}>
                   <strong className={styles.fieldLabel}>Pertanyaan tindak lanjut</strong>
@@ -271,6 +292,12 @@ export function ApplicationReview({ applicationId }: { applicationId: string }) 
                       <strong className={styles.fieldLabel}>{finding.fieldId === "businessProfile" ? "Profil bisnis" : "Ringkasan finansial"}</strong>
                       <p className={styles.sectionIntro}>{finding.summary}</p>
                       {finding.verificationItems.length ? <ul className={styles.concerns}>{finding.verificationItems.map((item) => <li key={item}>{item}</li>)}</ul> : null}
+                      {finding.verificationItems.length && programFields.some((field) => field.id === finding.fieldId) ? <Button className="mt-2" type="button" variant="outline" disabled={revisionFieldIds.includes(finding.fieldId)} onClick={() => {
+                        setRevisionFieldIds((current) => [...new Set([...current, finding.fieldId])]);
+                        setRevisionText((current) => [current, ...finding.verificationItems.map((item) => `Mohon konfirmasi pada ${finding.fieldId === "businessProfile" ? "profil bisnis" : "ringkasan finansial"}: ${item}`)].filter(Boolean).join("\n"));
+                        setNotice("Catatan dokumen ditambahkan ke draf revisi. Periksa sebelum mengirim.");
+                        document.getElementById("revision-heading")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                      }}>{revisionFieldIds.includes(finding.fieldId) ? "Ditambahkan ke draf revisi" : "Gunakan untuk draf revisi dokumen"}</Button> : null}
                     </div>
                   ))}
                   <p className={styles.sectionIntro}>Temuan otomatis perlu dicocokkan dengan dokumen asli.</p>

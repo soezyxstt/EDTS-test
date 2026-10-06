@@ -1,5 +1,9 @@
 // Node 24+: node scripts/check-program-fields.cjs
 const assert = require('node:assert/strict');
+require('node:module').registerHooks({ resolve(specifier, context, next) {
+  if (context.parentURL?.endsWith(".ts") && specifier.startsWith("./") && !require("node:path").extname(specifier)) specifier += ".ts";
+  return next(specifier === '@/lib/demo-session' ? new URL('../lib/demo-session.ts', require('node:url').pathToFileURL(__filename)).href : specifier, context);
+} });
 process.env.NODE_ENV = 'development';
 const { DEMO_PROGRAMS, readDemoPrograms } = require('../lib/demo-data.ts');
 const storage = new Map();

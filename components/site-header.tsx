@@ -40,7 +40,7 @@ export function SiteHeader() {
             <Button
               className="site-franchisor-link"
               nativeButton={false}
-              render={<Link href={{ pathname: "/sign-in", query: { callbackURL: "/manage" } }} onClick={closeMenu} />}
+              render={<Link href="/manage" onClick={closeMenu} />}
               size="sm"
             >
               Portal franchisor

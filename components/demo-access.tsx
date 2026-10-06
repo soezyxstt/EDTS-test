@@ -1,16 +1,12 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { DEMO_IDENTITIES, type DemoIdentityRole, writeDemoIdentity } from "@/lib/demo-session";
 
 export function DemoAccess({ callbackURL }: { callbackURL: string }) {
-  const router = useRouter();
   const [pendingRole, setPendingRole] = useState<DemoIdentityRole | null>(null);
   const [error, setError] = useState("");
-
-  if (process.env.NODE_ENV !== "development") return null;
 
   async function startDemo(role: DemoIdentityRole) {
     const identity = DEMO_IDENTITIES.find((item) => item.role === role);
@@ -30,8 +26,7 @@ export function DemoAccess({ callbackURL }: { callbackURL: string }) {
       const requestedPathMatchesRole = role === "applicant"
         ? callbackURL.startsWith("/apply/") || callbackURL.startsWith("/applications")
         : callbackURL.startsWith("/manage");
-      router.replace(requestedPathMatchesRole ? callbackURL : role === "franchisor" ? "/manage" : "/");
-      router.refresh();
+      window.location.assign(requestedPathMatchesRole ? callbackURL : role === "franchisor" ? "/manage" : "/applications");
     } catch {
       setError("Demo tidak dapat dimulai. Coba lagi.");
       setPendingRole(null);

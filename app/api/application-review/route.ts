@@ -1,6 +1,7 @@
 import { Buffer } from "node:buffer";
 import type { DocumentFinding, LocationAssessment, ProgramField } from "@/lib/demo-data";
 import { scoreScreening, type ScreeningResult } from "@/lib/screening";
+import { isCoachableField, normalizeActions, type ReviewAction } from "@/lib/ai-actions";
 
 const MAX_FORM_BYTES = 11 * 1024 * 1024;
 const MAX_DOCUMENT_BYTES = 5 * 1024 * 1024;
@@ -21,6 +22,7 @@ export type ReviewBrief = {
   strengths: string[];
   concerns: string[];
   questions: string[];
+  actions: ReviewAction[];
   score: number;
   source: "rules" | "gemini";
   reviewNote?: string;
@@ -122,6 +124,7 @@ function normalizeReview(value: unknown, input: ReviewInput, attachments: Docume
     strengths: safeList(result.strengths),
     concerns: safeList(result.concerns),
     questions: safeList(result.questions),
+    actions: normalizeActions(result.actions, input.fields, input.answers),
     score: scoreScreening(input.screening),
     locationAssessment,
     documentFindings,
@@ -145,6 +148,8 @@ function fallbackReview(input: ReviewInput, reason: string): ReviewBrief {
     strengths: [experience ? "Pengalaman bisnis dicantumkan" : "", investment ? "Kapasitas investasi dicantumkan" : ""].filter(Boolean),
     concerns: reasons.slice(0, 5),
     questions: ["Bagaimana rencana keterlibatan operasional?", "Apakah ada informasi yang perlu diperbarui sebelum tahap berikutnya?"],
+    actions: input.fields.filter((field) => isCoachableField(field) && field.required && !input.answers[field.id]?.trim())
+      .slice(0, 5).map((field) => ({ fieldId: field.id, evidence: "", suggestion: `Lengkapi ${field.label} dengan informasi yang dapat Anda buktikan.` })),
     score: scoreScreening(input.screening),
     source: "rules",
     reviewNote: `${reason} Ringkasan memakai pemeriksaan aturan otomatis.`,
@@ -313,11 +318,10 @@ export async function POST(request: Request) {
     return Response.json(fallbackReview(input, "Dokumen tidak dapat dibaca."));
   }
 
-  const excluded = /(name|email|phone|age|address|ktp|npwp|nib|identity|sitepin|consent|gender|government)/i;
-  const safeFields = input.fields.filter((field) => !excluded.test(field.id));
+  const safeFields = input.fields.filter(isCoachableField);
   const application = safeFields.flatMap((field) => {
     const value = string(input.answers[field.id], 1000);
-    return value ? [{ field: field.label, value }] : [];
+    return [{ fieldId: field.id, field: field.label, value, required: field.required }];
   });
   const locationData = input.fields
     .filter((field) => ["city", "siteArea", "buildingType", "siteOwnership", "siteTraffic", "siteNotes"].includes(field.id))
@@ -332,6 +336,7 @@ export async function POST(request: Request) {
     "Jangan mengulang nama, kontak, alamat rumah, NIK, NPWP, NIB, rekening, tanda tangan, atau identitas pribadi yang terlihat dalam dokumen.",
     "Nilai lokasi hanya dari data lokasi yang dikirim. Jangan mengarang data demografi, kompetitor, keramaian, atau verifikasi peta. Jika bukti kurang, gunakan rating insufficient-data. Penilaian ini bukan survei pasar.",
     "Berikan ringkasan, kekuatan, hal yang perlu dikonfirmasi, pertanyaan tindak lanjut, dan penilaian lokasi berisi rating, alasan, sinyal yang didukung data, serta kekurangan data.",
+    "Berikan maksimal 5 actions yang paling membantu pemohon memperjelas kesiapan usaha dan tim menyiapkan revisi. Setiap action berisi fieldId dari application, evidence berupa kutipan persis jawaban maksimal 300 karakter (string kosong hanya untuk jawaban kosong), dan suggestion berupa permintaan klarifikasi yang sopan dan spesifik. Jangan mengarang pengalaman, modal, proyeksi keuntungan, atau jawaban pengganti. Jangan memberi saran untuk identitas atau persetujuan. Jika tidak ada klarifikasi bermakna, kembalikan actions kosong.",
     "Untuk setiap dokumen yang benar-benar terlampir, ambil hanya fakta bisnis tingkat tinggi yang relevan. Tandai semua angka dan klaim untuk verifikasi manusia. Dokumen yang tidak terlampir belum dibaca.",
     JSON.stringify({
       program: input.programName,
@@ -364,6 +369,14 @@ export async function POST(request: Request) {
                   strengths: { type: "array", items: { type: "string" } },
                   concerns: { type: "array", items: { type: "string" } },
                   questions: { type: "array", items: { type: "string" } },
+                  actions: {
+                    type: "array",
+                    items: {
+                      type: "object",
+                      properties: { fieldId: { type: "string" }, evidence: { type: "string" }, suggestion: { type: "string" } },
+                      required: ["fieldId", "evidence", "suggestion"],
+                    },
+                  },
                   locationAssessment: {
                     type: "object",
                     properties: {
@@ -387,7 +400,7 @@ export async function POST(request: Request) {
                     },
                   },
                 },
-                required: ["summary", "strengths", "concerns", "questions", "locationAssessment", "documentFindings"],
+                required: ["summary", "strengths", "concerns", "questions", "actions", "locationAssessment", "documentFindings"],
               },
             },
           },
