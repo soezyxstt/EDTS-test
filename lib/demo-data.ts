@@ -1,4 +1,4 @@
-import { isDemoWorkspace } from "@/lib/demo-session";
+import { isDemoWorkspace, writeDemoIdentity, type DemoIdentityId } from "@/lib/demo-session";
 import type { ReviewAction } from "./ai-actions";
 import { evaluateScreening, scoreScreening } from "./screening";
 
@@ -443,6 +443,13 @@ export const readDemoApplications = () => !isDemoWorkspace() && !remoteWorkspace
   : readStored(applicationsKey(), isDemoWorkspace() ? DEMO_APPLICATIONS : []);
 export const writeDemoApplications = (applications: FranchiseApplication[]) => writeStored(applicationsKey(), applications);
 export const hasRemoteWorkspace = () => remoteWorkspaceLoaded;
+
+export function initializeDemoWorkspace(identityId: DemoIdentityId) {
+  remoteWorkspaceLoaded = false;
+  writeDemoIdentity(identityId);
+  if (!readDemoPrograms().length) writeDemoPrograms(structuredClone(DEMO_PROGRAMS));
+  if (!readDemoApplications().length) writeDemoApplications(structuredClone(DEMO_APPLICATIONS));
+}
 
 export function clearDemoWorkspace() {
   if (typeof window === "undefined") return;

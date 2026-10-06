@@ -65,7 +65,7 @@ Keep real credentials in an ignored local environment file. Do not commit creden
 
 For the hosted test, set `BETTER_AUTH_URL=https://edts-apm.adihnursyam.com` and register `https://edts-apm.adihnursyam.com/api/auth/callback/google` in Google OAuth. Production builds fall back to this canonical URL if the configured URL is localhost; the exact production origin is trusted without disabling CSRF checks.
 
-After the configured franchisor has signed in, run `node scripts/seed-programs.cjs` (Node 24+) to add the two starter programs to the database. Existing program records are preserved. The applicant form requires an applicant session; franchisor accounts use the management portal.
+After the configured franchisor has signed in, run `node scripts/seed-programs.cjs` (Node 24+) to add the two starter programs to the database. Existing program records are preserved. Google accounts can submit their own applications; franchisor accounts also retain management access. Applicant workspace requests (`view=applicant`) only read and write that account's applications.
 
 ### Database
 

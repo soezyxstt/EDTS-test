@@ -51,13 +51,16 @@ async function readBody(request: Request) {
   catch { throw new RequestError(400, "Body must be valid JSON."); }
 }
 
-async function authorizedSession() {
+async function authorizedSession(request: Request) {
   if (await getDemoSession()) throw new RequestError(401, "Demo data stays in this browser.");
   const session = await getSession();
   if (!session) throw new RequestError(401, "Sign in required.");
   const role = session.user.role;
   if (role !== "applicant" && role !== "franchisor") throw new RequestError(403, "Role is not allowed.");
-  return { userId: session.user.id, role };
+  const view = new URL(request.url).searchParams.get("view");
+  if (view !== null && view !== "applicant" && view !== "manage") throw new RequestError(400, "Invalid workspace view.");
+  if (view === "manage" && role !== "franchisor") throw new RequestError(403, "Franchisor access required.");
+  return { userId: session.user.id, role: view === "applicant" ? "applicant" as const : role };
 }
 
 async function workspace(userId: string, role: "applicant" | "franchisor") {
@@ -74,13 +77,13 @@ async function workspace(userId: string, role: "applicant" | "franchisor") {
     programs: programs
       .filter((row) => role === "franchisor" || row.payload.open === true)
       .map((row) => ({ ...row.payload, id: row.id, name: row.name })),
-    applications: applications.map((row) => ({ ...row.payload, id: row.id, programId: row.programId, stage: row.stage })),
+    applications: applications.map((row) => ({ ...row.payload, id: row.id, programId: row.programId, stage: row.stage, applicantIdentityId: row.applicantId })),
   };
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const { userId, role } = await authorizedSession();
+    const { userId, role } = await authorizedSession(request);
     return Response.json(await workspace(userId, role));
   } catch (error) {
     if (error instanceof RequestError) return Response.json({ error: error.message }, { status: error.status });
@@ -90,7 +93,7 @@ export async function GET() {
 
 export async function PUT(request: Request) {
   try {
-    const { userId, role } = await authorizedSession();
+    const { userId, role } = await authorizedSession(request);
     const body = jsonObject(await readBody(request), "workspace");
     const submittedPrograms = body.programs;
     const submittedApplications = body.applications;

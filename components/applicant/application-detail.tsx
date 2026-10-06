@@ -6,8 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { APPLICATION_STAGES, hasRemoteWorkspace, readDemoApplications, readDemoPrograms, updateDemoApplication, type FranchiseApplication, type ProgramField } from "@/lib/demo-data";
-import { readWorkspaceIdentity } from "@/lib/demo-session";
+import { APPLICATION_STAGES, readDemoApplications, readDemoPrograms, updateDemoApplication, type FranchiseApplication, type ProgramField } from "@/lib/demo-data";
+import { canApply, readWorkspaceIdentity } from "@/lib/demo-session";
 import { saveDemoFiles, type PendingDemoFile } from "@/lib/demo-files";
 import { DemoFileLink } from "@/components/demo-file-link";
 import { CommunicationPanel } from "@/components/communication-panel";
@@ -116,9 +116,9 @@ export default function ApplicationDetail({ applicationId }: { applicationId: st
     const refresh = () => {
       const identity = readWorkspaceIdentity();
       const candidate = readDemoApplications().find((item) => item.id === applicationId);
-      const item = candidate && identity.role === "applicant" && (hasRemoteWorkspace() || (candidate.applicantIdentityId
+      const item = candidate && canApply(identity) && (candidate.applicantIdentityId
         ? candidate.applicantIdentityId === identity.id
-        : candidate.email.toLowerCase() === identity.email.toLowerCase())) ? candidate : null;
+        : candidate.email.toLowerCase() === identity.email.toLowerCase()) ? candidate : null;
       setApplication(item);
       setProgramFields(item ? readDemoPrograms().find((program) => program.id === item.programId)?.fields ?? [] : []);
     };

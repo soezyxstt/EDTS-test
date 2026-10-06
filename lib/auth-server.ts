@@ -20,7 +20,7 @@ export async function requireRole(role: "applicant" | "franchisor", callbackURL 
   }
   const session = await getSession();
   if (session) {
-    if (session.user.role !== role) redirect("/profile");
+    if (session.user.role !== role && !(role === "applicant" && session.user.role === "franchisor")) redirect("/profile");
     return session;
   }
 

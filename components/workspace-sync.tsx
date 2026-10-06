@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { authClient } from "@/lib/auth-client";
 import {
   clearDemoWorkspace,
+  initializeDemoWorkspace,
   hydrateDemoWorkspace,
   readDemoApplications,
   readDemoPrograms,
@@ -11,8 +12,16 @@ import {
   type FranchiseProgram,
 } from "@/lib/demo-data";
 import { clearDemoIdentity, writeAuthenticatedIdentity } from "@/lib/demo-session";
+import { usePathname } from "next/navigation";
+import type { DemoIdentityId } from "@/lib/demo-session";
+
+export function DemoWorkspaceSync({ identityId }: { identityId: DemoIdentityId }) {
+  useEffect(() => { initializeDemoWorkspace(identityId); }, [identityId]);
+  return null;
+}
 
 export function WorkspaceSync() {
+  const view = usePathname().startsWith("/manage") ? "manage" : "applicant";
   const { data: session, isPending } = authClient.useSession();
   const [failedUserId, setFailedUserId] = useState<string | null>(null);
   const ready = useRef(false);
@@ -31,7 +40,7 @@ export function WorkspaceSync() {
     let cancelled = false;
     ready.current = false;
     role.current = userRole === "applicant" || userRole === "franchisor"
-      ? userRole
+      ? view === "applicant" ? "applicant" : userRole
       : null;
     clearDemoWorkspace();
 
@@ -43,12 +52,12 @@ export function WorkspaceSync() {
       id: userId,
       name: userName,
       email: userEmail,
-      role: role.current,
+      role: userRole as "applicant" | "franchisor",
     });
 
     void (async () => {
       try {
-        const response = await fetch("/api/workspace", { cache: "no-store" });
+        const response = await fetch(`/api/workspace?view=${view}`, { cache: "no-store" });
         if (!response.ok) throw new Error("Could not load workspace.");
         const workspace = await response.json() as {
           programs?: FranchiseProgram[];
@@ -71,7 +80,7 @@ export function WorkspaceSync() {
       cancelled = true;
       ready.current = false;
     };
-  }, [isPending, signedIn, userId, userName, userEmail, userRole]);
+  }, [isPending, signedIn, userId, userName, userEmail, userRole, view]);
 
   useEffect(() => {
     function scheduleSave() {
@@ -84,7 +93,7 @@ export function WorkspaceSync() {
           ? { programs: readDemoPrograms(), applications: readDemoApplications() }
           : { applications: readDemoApplications() };
         try {
-          const response = await fetch("/api/workspace", {
+          const response = await fetch(`/api/workspace?view=${view}`, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload),
@@ -102,7 +111,7 @@ export function WorkspaceSync() {
       window.removeEventListener("franchise-prototype:update", scheduleSave);
       clearTimeout(saveTimer.current);
     };
-  }, [userId]);
+  }, [userId, view]);
 
   return failedUserId === userId && userId ? (
     <p className="fixed inset-x-4 bottom-4 z-50 mx-auto max-w-xl border border-border bg-background p-3 text-sm shadow-lg" role="alert">

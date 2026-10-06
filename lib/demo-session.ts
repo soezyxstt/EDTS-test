@@ -35,6 +35,10 @@ export function isDemoWorkspace() {
   catch { return false; }
 }
 
+export function canApply(identity: WorkspaceIdentity) {
+  return identity.role === "applicant" || (!isDemoWorkspace() && identity.role === "franchisor");
+}
+
 export function readDemoIdentity(): DemoIdentity {
   if (typeof window === "undefined") return DEMO_IDENTITIES[0];
 

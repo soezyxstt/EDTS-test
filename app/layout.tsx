@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Roboto } from "next/font/google";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
-import { WorkspaceSync } from "@/components/workspace-sync";
+import { DemoWorkspaceSync, WorkspaceSync } from "@/components/workspace-sync";
 import "./globals.css";
 import { getDemoSession } from "@/lib/auth-server";
 import { PageMotion } from "@/components/page-motion";
@@ -22,7 +22,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
         <SiteHeader />
         <main className="flex min-w-0 flex-1 flex-col"><PageMotion>{children}</PageMotion></main>
         <SiteFooter />
-        {process.env.NODE_ENV === "development" || demo ? null : <WorkspaceSync />}
+        {demo ? <DemoWorkspaceSync identityId={demo.id} /> : process.env.NODE_ENV === "development" ? null : <WorkspaceSync />}
       </body>
     </html>
   );

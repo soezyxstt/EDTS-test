@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { DEMO_IDENTITIES, type DemoIdentityRole, writeDemoIdentity } from "@/lib/demo-session";
+import { DEMO_IDENTITIES, type DemoIdentityRole } from "@/lib/demo-session";
+import { initializeDemoWorkspace } from "@/lib/demo-data";
 
 export function DemoAccess({ callbackURL }: { callbackURL: string }) {
   const [pendingRole, setPendingRole] = useState<DemoIdentityRole | null>(null);
@@ -22,7 +23,7 @@ export function DemoAccess({ callbackURL }: { callbackURL: string }) {
       });
       if (!response.ok) throw new Error("Akses demo tidak tersedia.");
 
-      writeDemoIdentity(identity.id);
+      initializeDemoWorkspace(identity.id);
       const requestedPathMatchesRole = role === "applicant"
         ? callbackURL.startsWith("/apply/") || callbackURL.startsWith("/applications")
         : callbackURL.startsWith("/manage");

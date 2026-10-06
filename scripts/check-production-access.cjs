@@ -12,8 +12,8 @@ registerHooks({ resolve(specifier, context, next) {
 } });
 process.env.NODE_ENV = 'production';
 const { authURLs } = require('../lib/auth-config.ts');
-const { writeDemoIdentity, clearDemoIdentity } = require('../lib/demo-session.ts');
-const { DEMO_APPLICATIONS, readDemoApplications, writeDemoApplications, hydrateDemoWorkspace, clearDemoWorkspace } = require('../lib/demo-data.ts');
+const { writeDemoIdentity, clearDemoIdentity, canApply, readWorkspaceIdentity } = require('../lib/demo-session.ts');
+const { DEMO_APPLICATIONS, readDemoApplications, writeDemoApplications, hydrateDemoWorkspace, clearDemoWorkspace, initializeDemoWorkspace, readDemoPrograms } = require('../lib/demo-data.ts');
 const storage = new Map();
 global.window = { localStorage: { getItem: key => storage.get(key) ?? null, setItem: (key, value) => storage.set(key, value), removeItem: key => storage.delete(key) }, dispatchEvent() {} };
 assert.equal(authURLs('http://localhost:3000', true).baseURL, 'https://edts-apm.adihnursyam.com');
@@ -29,6 +29,22 @@ hydrateDemoWorkspace([], [{ ...DEMO_APPLICATIONS[0], id: 'account-test' }]);
 assert.equal(readDemoApplications()[0].id, 'account-test');
 writeDemoIdentity('nadia');
 assert.equal(readDemoApplications()[0].id, 'demo-test');
+storage.set('franchise-prototype:programs:v2', '[]');
+storage.set('franchise-prototype:applications:v1', '[]');
+clearDemoIdentity();
+initializeDemoWorkspace('tim');
+assert.equal(readWorkspaceIdentity().id, 'tim');
+assert.equal(readDemoPrograms().length, 2);
+assert.equal(readDemoApplications().length, DEMO_APPLICATIONS.length);
+assert.equal(canApply(readWorkspaceIdentity()), false);
+const preserved = readDemoApplications();
+preserved[0].summary = 'Preserve demo edits';
+writeDemoApplications(preserved);
+initializeDemoWorkspace('nadia');
+assert.equal(readDemoApplications()[0].summary, 'Preserve demo edits');
+assert.equal(canApply(readWorkspaceIdentity()), true);
+clearDemoIdentity();
+assert.equal(canApply({ id: 'google', name: 'Test', email: 'test@example.test', role: 'franchisor' }), true);
 
 (async () => {
   // Exercise the signed-in branch without borrowing a real user's session token.

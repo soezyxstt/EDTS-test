@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { LocationPicker } from "@/components/applicant/location-picker";
 import { hasRemoteWorkspace, readDemoPrograms, saveDemoApplication, updateDemoApplication, type DocumentFinding, type FranchiseProgram, type LocationAssessment, type ProgramField } from "@/lib/demo-data";
 import { parseMapPoint } from "@/lib/location";
-import { isDemoWorkspace, readWorkspaceIdentity, readDemoProfile, writeDemoProfile, type WorkspaceIdentity } from "@/lib/demo-session";
+import { canApply, isDemoWorkspace, readWorkspaceIdentity, readDemoProfile, writeDemoProfile, type WorkspaceIdentity } from "@/lib/demo-session";
 import { evaluateScreening, scoreScreening } from "@/lib/screening";
 import { saveDemoFiles, type PendingDemoFile } from "@/lib/demo-files";
 import { normalizeActions } from "@/lib/ai-actions";
@@ -46,7 +46,7 @@ function draftKey(identityId: string, programId: string) {
 }
 
 function profileAnswers(identity: WorkspaceIdentity): Answers {
-  if (identity.role !== "applicant") return {};
+  if (!canApply(identity)) return {};
   const profile = readDemoProfile(identity.id, { fullName: identity.name, email: identity.email });
   return {
     fullName: profile.fullName,
@@ -175,7 +175,7 @@ export default function ApplicationForm({
       activeIdentityId = identity.id;
       setDraftIdentityId(identity.id);
       const savedProfile = profileAnswers(identity);
-      setIsApplicant(identity.role === "applicant");
+      setIsApplicant(canApply(identity));
       const storedProgram = (isDemoWorkspace() || hasRemoteWorkspace())
         ? readDemoPrograms().find((item) => item.id === programId)
         : undefined;
@@ -205,7 +205,7 @@ export default function ApplicationForm({
         ? readDemoPrograms().find((item) => item.id === programId)
         : undefined;
       const currentProgram = updated ?? fallbackProgram;
-      setIsApplicant(identity.role === "applicant");
+      setIsApplicant(canApply(identity));
       if (identity.id !== activeIdentityId) {
         activeIdentityId = identity.id;
         setDraftIdentityId(identity.id);

@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { APPLICATION_STAGES, hasRemoteWorkspace, readDemoApplications, type FranchiseApplication } from "@/lib/demo-data";
-import { readWorkspaceIdentity } from "@/lib/demo-session";
+import { APPLICATION_STAGES, readDemoApplications, type FranchiseApplication } from "@/lib/demo-data";
+import { canApply, readWorkspaceIdentity } from "@/lib/demo-session";
 
 function stageLabel(stage: FranchiseApplication["stage"]) {
   return APPLICATION_STAGES.find((item) => item.id === stage)?.label ?? stage;
@@ -22,9 +22,9 @@ export default function ApplicationList() {
   useEffect(() => {
     const refresh = () => {
       const identity = readWorkspaceIdentity();
-      setIdentityRole(identity.role);
-      setApplications(identity.role === "applicant"
-        ? hasRemoteWorkspace() ? readDemoApplications() : readDemoApplications().filter((application) => application.applicantIdentityId === identity.id || (!application.applicantIdentityId && application.email.toLowerCase() === identity.email.toLowerCase()))
+      setIdentityRole(canApply(identity) ? "applicant" : identity.role);
+      setApplications(canApply(identity)
+        ? readDemoApplications().filter((application) => application.applicantIdentityId === identity.id || (!application.applicantIdentityId && application.email.toLowerCase() === identity.email.toLowerCase()))
         : []);
     };
     refresh();
